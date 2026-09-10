@@ -1,0 +1,86 @@
+# Codemagic CI/CD yapılandırması — Shot Oyunu (Flutter)
+#
+# Bu dosya repo kök dizininde olduğu için Codemagic otomatik algılar.
+# Android workflow imzasız/debug-signing ile doğrudan çalışır (APK indirip
+# telefona kurmak için yeterli). Play Store'a yüklenecek imzalı bir AAB için
+# Codemagic > Uygulama Ayarları > Code signing identities kısmından bir
+# keystore ekleyip aşağıdaki `android_signing` bloğunun yorumunu kaldır ve
+# `keystore_reference` adını orada verdiğin isimle eşleştir.
+#
+# iOS workflow için Codemagic'in "Automatic code signing" özelliğini kullanır;
+# bu, App Store Connect API anahtarını Codemagic > Teams > Code signing
+# identities kısmında tanımlamanı ve aşağıdaki `ios_signing` bloğundaki
+# `distribution_type`/`bundle_identifier` değerlerini kendi hesabına göre
+# doğrulamanı gerektirir. Detaylı adımlar: https://docs.codemagic.io/yaml-code-signing/signing-ios/
+
+workflows:
+  android-workflow:
+    name: Android Workflow
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      # android_signing:
+      #   - keystore_reference
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze
+      - name: Run tests
+        script: flutter test
+      - name: Build APK (imzasız — doğrudan indirip kurulabilir)
+        script: flutter build apk --release
+      - name: Build AAB (Play Store'a yüklemek için)
+        script: flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/release/*.aab
+    publishing:
+      email:
+        recipients:
+          - ckertam9696@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  ios-workflow:
+    name: iOS Workflow
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.ckertam.shotoyunu.shotOyunu
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze
+      - name: Run tests
+        script: flutter test
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Install CocoaPods dependencies
+        script: |
+          find . -name "Podfile" -maxdepth 2 -execdir pod install \;
+      - name: Build IPA
+        script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - ckertam9696@gmail.com
+        notify:
+          success: true
+          failure: true

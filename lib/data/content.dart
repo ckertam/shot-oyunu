@@ -66,6 +66,21 @@ const List<String> neverHaveIEver = [
   'Hiç yapmadım... sosyal medyada eski fotoğraflarımı silmedim.',
   'Hiç yapmadım... bir yalan söyleyip hemen unuttum sanmadım.',
   'Hiç yapmadım... bu masadaki birine gizli bir sırrım olmadı.',
+  'Hiç yapmadım... bir toplantıda kamerayı kapalı sanıp yanlış bir şey yapmadım.',
+  'Hiç yapmadım... yalan yere "yoldayım" demedim.',
+  'Hiç yapmadım... bir arkadaşımın doğum gününü unutmadım.',
+  'Hiç yapmadım... alışverişte fiyat etiketini görüp vazgeçmedim.',
+  'Hiç yapmadım... bir dizi/film karakterine gerçekten aşık olmadım.',
+  'Hiç yapmadım... aynı şakayı ikinci kez anlattığımı fark etmedim.',
+  'Hiç yapmadım... bir toplantıyı yanlış anlayıp hazırlıksız gelmedim.',
+  'Hiç yapmadım... birine "seni görmedim" diye yalan söylemedim.',
+  'Hiç yapmadım... telefonuma yanlışlıkla bir şey siparişi vermedim.',
+  "Hiç yapmadım... bu masadaki birinin Instagram'ını gizlice stalklamadım.",
+  'Hiç yapmadım... bir konuşmada "aynen" deyip hiçbir şey anlamadığım halde başımı sallamadım.',
+  'Hiç yapmadım... uykuya dalıp önemli bir bildirimi kaçırmadım.',
+  'Hiç yapmadım... bir yerde kaybolup rota sormaya utanmadım.',
+  'Hiç yapmadım... bir gruba yanlışlıkla özel bir mesaj göndermedim.',
+  'Hiç yapmadım... bir randevuya/toplantıya yanlış günde gitmedim.',
 ];
 
 const List<String> mostLikelyTo = [
@@ -89,6 +104,21 @@ const List<String> mostLikelyTo = [
   'Bu grupta kim en çabuk pes eder?',
   'Bu grupta kim en iyi yalan atar (şaka amaçlı)?',
   'Bu grupta kim en çok "son bir tane daha" der?',
+  'Bu grupta kim en çok plan yapıp hiçbirini uygulamaz?',
+  'Bu grupta kim bir gün stand-up yapar?',
+  'Bu grupta kim tatile giderken en çok eşya götürür?',
+  'Bu grupta kim en çok "ben söylemiştim" der?',
+  'Bu grupta kim bir gün maratona katılır?',
+  'Bu grupta kim en çok arabada şarkı söyler?',
+  'Bu grupta kim en çok grup tatilini organize eder?',
+  'Bu grupta kim en kolay ağlar (mutluluktan da olsa)?',
+  'Bu grupta kim en çok "diyetteyim" deyip sonra yemeği bitirir?',
+  'Bu grupta kim gece yarısı en garip fikirleri ortaya atar?',
+  'Bu grupta kim bir gün podcast açar?',
+  'Bu grupta kim en çok telefonunu kaybeder/arar?',
+  'Bu grupta kim en çabuk yeni bir hobiye atlar ve bırakır?',
+  'Bu grupta kim en iyi taklit yapar?',
+  'Bu grupta kim bu masadan en son ayrılır?',
 ];
 
 class WheelSegment {
@@ -107,4 +137,6 @@ const List<WheelSegment> wheelSegments = [
   WheelSegment('Şarkı Söyle\nYoksa İç', 0xFFFB5607),
   WheelSegment('Bedava!\nKimse İçmesin', 0xFF3A86FF),
   WheelSegment('Komşunu Seç\nO İçsin', 0xFFFF006E),
+  WheelSegment('Taklit Yap\nYoksa İç', 0xFFFFBE0B),
+  WheelSegment('3 Yudum İç', 0xFF9B5DE5),
 ];
