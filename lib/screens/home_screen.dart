@@ -1,125 +1,148 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../data/content.dart';
-import 'kings_cup_screen.dart';
-import 'statement_cycle_screen.dart';
-import 'wheel_screen.dart';
+import '../data/room_controller.dart';
+import '../data/room_models.dart';
+import '../theme/nocturne_theme.dart';
+import '../theme/nocturne_widgets.dart';
+import 'settings_screen.dart';
 
-class _ModeInfo {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final WidgetBuilder builder;
-
-  const _ModeInfo({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.builder,
-  });
-}
-
+/// Ana ekran — mode select. Only the host may pick a mode (enforced by the
+/// RTDB rules too); everyone's screen switches together when `room.mode`
+/// changes, since RootScreen re-routes on every room update.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final modes = <_ModeInfo>[
-      _ModeInfo(
-        title: 'Kral Bardağı',
-        subtitle: 'Kart çek, kurala uy',
-        icon: Icons.style_rounded,
-        color: const Color(0xFFFFD166),
-        builder: (_) => const KingsCupScreen(),
-      ),
-      _ModeInfo(
-        title: 'Hiç Yapmadım',
-        subtitle: 'Yapan içer',
-        icon: Icons.visibility_off_rounded,
-        color: const Color(0xFF06D6A0),
-        builder: (_) => StatementCycleScreen(
-          title: 'Hiç Yapmadım',
-          accentColor: const Color(0xFF06D6A0),
-          statements: neverHaveIEver,
-        ),
-      ),
-      _ModeInfo(
-        title: 'Kim Daha Çok',
-        subtitle: 'En çok oy alan içer',
-        icon: Icons.groups_rounded,
-        color: const Color(0xFFEF476F),
-        builder: (_) => StatementCycleScreen(
-          title: 'Kim Daha Çok',
-          accentColor: const Color(0xFFEF476F),
-          statements: mostLikelyTo,
-        ),
-      ),
-      _ModeInfo(
-        title: 'Çark Çevir',
-        subtitle: 'Şansına ne çıkarsa',
-        icon: Icons.donut_large_rounded,
-        color: const Color(0xFFFB5607),
-        builder: (_) => const WheelScreen(),
-      ),
+    final rc = context.watch<RoomController>();
+    final room = rc.room!;
+    final connectedCount = room.players.values.where((p) => p.connected).length;
+    final neverCount = room.difficulty == Difficulty.hard
+        ? neverHaveIEverHard.length
+        : neverHaveIEverLight.length;
+
+    final modes = <(GameMode, String, String, bool)>[
+      (GameMode.kings, 'Kral Bardağı', '${kingsCupRules.length * 4} kart, ${kingsCupRules.length} kural, tek bardak', true),
+      (GameMode.never, 'Hiç Yapmadım', '$neverCount itiraf', false),
+      (GameMode.most, 'Kim Daha Çok', 'Oy ver, en çok oy alan içer', false),
+      (GameMode.wheel, 'Çark Çevir', '${wheelSegments.length} dilim, pazarlık yok', false),
     ];
+
+    final link = 'https://ckertam.github.io/shot-oyunu/?room=${room.code}';
 
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 12),
-                  const Text('🍻', style: TextStyle(fontSize: 40)),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Shot Oyunu',
-                    style: Theme.of(context).textTheme.headlineMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(NocturneSpace.side, 12, NocturneSpace.side, 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Bu gece\nne oynuyoruz?',
+                              style: TextStyle(
+                                fontSize: 40,
+                                height: 1.0,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.6,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              '$connectedCount oyuncu hazır · Oda ${room.code}',
+                              style: const TextStyle(fontSize: 15, color: NocturneColors.neutral500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        ),
+                        icon: const Icon(Icons.settings_outlined, color: NocturneColors.neutral400),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Bir mod seç, kadehleri hazırla.',
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: NocturneSpace.side),
+                    children: [
+                      for (final (mode, title, subtitle, emphasized) in modes) ...[
+                        _ModeCard(
+                          title: title,
+                          subtitle: subtitle,
+                          emphasized: emphasized,
+                          enabled: rc.isHost,
+                          onTap: () => rc.setMode(mode),
+                        ),
+                        const SizedBox(height: NocturneSpace.cardGap),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  Expanded(
-                    child: GridView.builder(
-                      itemCount: modes.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
-                            childAspectRatio: 0.95,
-                          ),
-                      itemBuilder: (context, index) {
-                        final mode = modes[index];
-                        return _ModeCard(
-                          mode: mode,
-                          onTap: () {
-                            Navigator.of(context)
-                                .push(MaterialPageRoute(builder: mode.builder));
-                          },
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    NocturneSpace.side,
+                    0,
+                    NocturneSpace.side,
+                    NocturneSpace.bottomSafe,
+                  ),
+                  child: NocturneCard(
+                    background: NocturneColors.surface3,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    onTap: () async {
+                      await Clipboard.setData(ClipboardData(text: link));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Oda linki kopyalandı')),
                         );
-                      },
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: NocturneColors.accent900,
+                            borderRadius: BorderRadius.circular(NocturneRadius.md),
+                          ),
+                          child: const Text('+', style: TextStyle(fontSize: 18, color: NocturneColors.accent300)),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Arkadaşlarını çağır', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                              SizedBox(height: 2),
+                              Text(
+                                'Oda linkini paylaş, herkes kendi telefonundan',
+                                style: TextStyle(fontSize: 13, color: NocturneColors.neutral500),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    'Sorumlu iç, kimseyi zorlama. 18+',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: Colors.white38),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -129,53 +152,53 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _ModeCard extends StatelessWidget {
-  final _ModeInfo mode;
+  final String title;
+  final String subtitle;
+  final bool emphasized;
+  final bool enabled;
   final VoidCallback onTap;
 
-  const _ModeCard({required this.mode, required this.onTap});
+  const _ModeCard({
+    required this.title,
+    required this.subtitle,
+    required this.emphasized,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: mode.color.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: mode.color.withValues(alpha: 0.5)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(mode.icon, color: mode.color, size: 34),
-              Column(
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: NocturneCard(
+        background: emphasized ? NocturneColors.surface : NocturneColors.surface2,
+        borderColor: emphasized ? NocturneColors.accent : NocturneColors.border,
+        padding: EdgeInsets.all(emphasized ? 24 : 22),
+        onTap: enabled ? onTap : null,
+        child: emphasized
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    mode.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
+                  Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, letterSpacing: -0.3)),
+                  const SizedBox(height: 6),
+                  Text(subtitle, style: const TextStyle(fontSize: 14, color: NocturneColors.neutral400)),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Text(subtitle, style: const TextStyle(fontSize: 14, color: NocturneColors.neutral500)),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    mode.subtitle,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12.5,
-                    ),
-                  ),
+                  const Text('→', style: TextStyle(fontSize: 20, color: NocturneColors.accent400)),
                 ],
               ),
-            ],
-          ),
-        ),
       ),
     );
   }

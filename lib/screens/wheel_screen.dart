@@ -1,9 +1,18 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../data/content.dart';
+import '../data/room_controller.dart';
+import '../theme/nocturne_theme.dart';
+import '../theme/nocturne_widgets.dart';
+import 'game_header.dart';
 
+/// Çark Çevir — whoever spins writes `{spinId, resultIndex}` to
+/// `room/game/wheel`; every client (including the spinner) reacts to the
+/// `spinId` change by running its own local spin animation ending on the
+/// shared `resultIndex`. Same result everywhere, not frame-synced animation.
 class WheelScreen extends StatefulWidget {
   const WheelScreen({super.key});
 
@@ -15,16 +24,18 @@ class _WheelScreenState extends State<WheelScreen> with SingleTickerProviderStat
   late final AnimationController _controller;
   late Animation<double> _animation;
   double _currentAngle = 0;
-  int? _resultIndex;
-  bool _spinning = false;
+  int? _lastSpinId;
+  bool _seenFirstRoom = false;
   final _random = Random();
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 4));
-    _animation = Tween<double>(begin: 0, end: 0).animate(_controller)
-      ..addListener(() => setState(() {}));
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 3600));
+    _animation = Tween<double>(begin: 0, end: 0).animate(_controller);
+    // Repaint every tick, and once more on completion so `spinning` (derived
+    // from _controller.isAnimating) is re-read and the result panel updates.
+    _controller.addListener(() => setState(() {}));
   }
 
   @override
@@ -33,125 +44,144 @@ class _WheelScreenState extends State<WheelScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  void _spin() {
-    if (_spinning) return;
-    final n = wheelSegments.length;
-    final seg = 2 * pi / n;
-    final winner = _random.nextInt(n);
+  void _onRoomWheelState(int? spinId, int? resultIndex, int segmentCount) {
+    if (!_seenFirstRoom) {
+      _seenFirstRoom = true;
+      _lastSpinId = spinId;
+      if (resultIndex != null) {
+        _currentAngle = _angleFor(resultIndex, segmentCount);
+        _animation = Tween<double>(begin: _currentAngle, end: _currentAngle).animate(_controller);
+      }
+      return;
+    }
+    if (spinId != null && spinId != _lastSpinId) {
+      _lastSpinId = spinId;
+      // Defer past the current build — starting the animation calls
+      // setState (via the controller listener), which build() may not do.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _animateTo(resultIndex ?? 0, segmentCount);
+      });
+    }
+  }
+
+  double _angleFor(int winner, int segmentCount) {
+    final seg = 2 * pi / segmentCount;
     final winnerCenter = winner * seg + seg / 2;
     final jitter = (_random.nextDouble() - 0.5) * seg * 0.6;
-    final targetMod = -winnerCenter - jitter;
-    final normalizedTarget = ((targetMod - _currentAngle) % (2 * pi) + (2 * pi)) % (2 * pi);
-    final extraSpins = 5 + _random.nextInt(3);
-    final delta = extraSpins * 2 * pi + normalizedTarget;
+    return -winnerCenter - jitter;
+  }
+
+  void _animateTo(int winner, int segmentCount) {
+    final target = _angleFor(winner, segmentCount);
+    final normalizedTarget = ((target - _currentAngle) % (2 * pi) + (2 * pi)) % (2 * pi);
+    const extraSpins = 5;
     final start = _currentAngle;
-    final end = _currentAngle + delta;
-
+    final end = _currentAngle + extraSpins * 2 * pi + normalizedTarget;
     setState(() {
-      _spinning = true;
-      _resultIndex = null;
       _animation = Tween<double>(begin: start, end: end)
-          .chain(CurveTween(curve: Curves.easeOutCubic))
-          .animate(_controller)
-        ..addListener(() => setState(() {}));
+          .chain(CurveTween(curve: const Cubic(0.16, 1, 0.3, 1)))
+          .animate(_controller);
     });
-
     _controller.forward(from: 0).whenComplete(() {
-      setState(() {
-        _currentAngle = end % (2 * pi);
-        _resultIndex = winner;
-        _spinning = false;
-      });
+      if (mounted) setState(() => _currentAngle = end % (2 * pi));
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final angle = _animation.value;
-    final result = _resultIndex != null ? wheelSegments[_resultIndex!] : null;
+    final rc = context.watch<RoomController>();
+    final wheel = rc.room!.wheel;
+    final segmentCount = wheelSegments.length;
+    _onRoomWheelState(wheel?.spinId, wheel?.resultIndex, segmentCount);
+
+    final spinning = _controller.isAnimating;
+    final result = (!spinning && wheel?.resultIndex != null) ? wheelSegments[wheel!.resultIndex!] : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Çark Çevir')),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: SizedBox(
-                    width: 280,
-                    height: 300,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned(
-                          top: 0,
-                          child: CustomPaint(
-                            size: const Size(36, 24),
-                            painter: _PointerPainter(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              children: [
+                const GameHeader(title: 'Çark Çevir', trailing: ''),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: NocturneSpace.side),
+                    children: [
+                      const SizedBox(height: 12),
+                      Center(
+                        child: SizedBox(
+                          width: 310,
+                          height: 330,
+                          child: Stack(
+                            alignment: Alignment.topCenter,
+                            children: [
+                              Positioned(
+                                top: 20,
+                                child: Transform.rotate(
+                                  angle: _animation.value,
+                                  child: CustomPaint(
+                                    size: const Size(310, 310),
+                                    painter: _WheelPainter(segmentCount),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 20 + 310 / 2 - 48,
+                                child: Container(
+                                  width: 96,
+                                  height: 96,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: NocturneColors.bg,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: NocturneColors.surface, width: 8),
+                                  ),
+                                  child: Text(
+                                    spinning ? '…' : 'ÇEVİR',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: NocturneColors.neutral500),
+                                  ),
+                                ),
+                              ),
+                              const Positioned(top: 0, child: _PointerTriangle()),
+                            ],
                           ),
                         ),
-                        Positioned(
-                          top: 20,
-                          child: Transform.rotate(
-                            angle: angle,
-                            child: CustomPaint(
-                              size: const Size(280, 280),
-                              painter: _WheelPainter(),
+                      ),
+                      const SizedBox(height: 28),
+                      NocturneCard(
+                        background: NocturneColors.surface2,
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            const NocturneKicker('Sonuç'),
+                            const SizedBox(height: 8),
+                            Text(
+                              spinning ? '…' : (result?.label.replaceAll('\n', ' ') ?? 'ÇEVİR'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: NocturneColors.accent400),
                             ),
-                          ),
+                          ],
                         ),
-                        Positioned(
-                          top: 20 + 280 / 2 - 10,
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black26, width: 2),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              if (result != null && !_spinning)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 20),
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: Color(result.colorValue).withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Color(result.colorValue)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    NocturneSpace.side,
+                    12,
+                    NocturneSpace.side,
+                    NocturneSpace.bottomSafe,
                   ),
-                  child: Text(
-                    result.label.replaceAll('\n', ' '),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  child: NocturnePrimaryButton(
+                    label: spinning ? 'Çevriliyor…' : 'Çarkı çevir',
+                    onPressed: spinning ? null : () => rc.spinWheel(segmentCount: segmentCount),
                   ),
                 ),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFB5607),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: _spinning ? null : _spin,
-                  child: Text(
-                    _spinning ? 'ÇEVRİLİYOR...' : 'ÇARKI ÇEVİR',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -160,51 +190,46 @@ class _WheelScreenState extends State<WheelScreen> with SingleTickerProviderStat
 }
 
 class _WheelPainter extends CustomPainter {
+  final int segmentCount;
+  const _WheelPainter(this.segmentCount);
+
+  static const _palette = [
+    NocturneColors.surface,
+    NocturneColors.accent,
+    NocturneColors.surface,
+    NocturneColors.accent2_400,
+  ];
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
-    final n = wheelSegments.length;
-    final seg = 2 * pi / n;
+    final seg = 2 * pi / segmentCount;
     final paint = Paint()..style = PaintingStyle.fill;
 
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < segmentCount; i++) {
       final startAngle = -pi / 2 + i * seg;
-      paint.color = Color(wheelSegments[i].colorValue);
+      paint.color = _palette[i % _palette.length];
       canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, seg, true, paint);
-    }
-
-    final linePaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.25)
-      ..strokeWidth = 2;
-    for (int i = 0; i < n; i++) {
-      final a = -pi / 2 + i * seg;
-      canvas.drawLine(center, center + Offset(cos(a), sin(a)) * radius, linePaint);
     }
 
     canvas.drawCircle(
       center,
-      radius - 1,
+      radius - 4,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = Colors.white.withValues(alpha: 0.8),
+        ..strokeWidth = 8
+        ..color = NocturneColors.surface,
     );
 
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < segmentCount; i++) {
       final mid = -pi / 2 + i * seg + seg / 2;
       final textRadius = radius * 0.62;
       final pos = center + Offset(cos(mid), sin(mid)) * textRadius;
-
       final tp = TextPainter(
         text: TextSpan(
           text: wheelSegments[i].label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            height: 1.1,
-          ),
+          style: const TextStyle(color: NocturneColors.text, fontSize: 11, fontWeight: FontWeight.w700, height: 1.1),
         ),
         textAlign: TextAlign.center,
         textDirection: TextDirection.ltr,
@@ -222,9 +247,15 @@ class _WheelPainter extends CustomPainter {
   bool shouldRepaint(covariant _WheelPainter oldDelegate) => false;
 }
 
-/// Çarkın üstündeki sabit ok — hangi dilimin kazandığını gösterir.
-/// (Icons.arrow_drop_down_rounded web'de bu ekranda görünmüyordu, o yüzden
-/// tıpkı çark gibi doğrudan canvas'a çiziliyor.)
+class _PointerTriangle extends StatelessWidget {
+  const _PointerTriangle();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(size: const Size(26, 22), painter: _PointerPainter());
+  }
+}
+
 class _PointerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -233,19 +264,7 @@ class _PointerPainter extends CustomPainter {
       ..lineTo(size.width, 0)
       ..lineTo(size.width / 2, size.height)
       ..close();
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.black26
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
+    canvas.drawPath(path, Paint()..color = NocturneColors.accent);
   }
 
   @override

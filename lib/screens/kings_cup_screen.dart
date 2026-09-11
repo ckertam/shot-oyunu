@@ -1,9 +1,15 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../data/content.dart';
+import '../data/room_controller.dart';
+import '../theme/nocturne_theme.dart';
+import '../theme/nocturne_widgets.dart';
+import 'game_header.dart';
 
+/// Kral Bardağı — shared deck order + drawnCount live in
+/// `room/game/kings` (see RoomRepository.drawNextKing); any player may draw,
+/// guarded by a transaction so a shared tap-race can't double-draw a card.
 class KingsCupScreen extends StatefulWidget {
   const KingsCupScreen({super.key});
 
@@ -12,94 +18,144 @@ class KingsCupScreen extends StatefulWidget {
 }
 
 class _KingsCupScreenState extends State<KingsCupScreen> {
-  static const _accent = Color(0xFFFFD166);
+  final _deck = buildDeck();
+  bool _busy = false;
 
-  late List<PlayingCard> _deck;
-  int _index = -1;
-
-  @override
-  void initState() {
-    super.initState();
-    _reshuffle();
-  }
-
-  void _reshuffle() {
-    setState(() {
-      _deck = buildDeck()..shuffle(Random());
-      _index = -1;
-    });
-  }
-
-  void _drawNext() {
-    setState(() {
-      if (_index + 1 >= _deck.length) {
-        _reshuffle();
-      } else {
-        _index++;
-      }
-    });
+  Future<void> _draw() async {
+    setState(() => _busy = true);
+    try {
+      await context.read<RoomController>().drawNextKing(deckSize: _deck.length);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final current = _index >= 0 ? _deck[_index] : null;
-    final remaining = _deck.length - (_index + 1);
+    final rc = context.watch<RoomController>();
+    final kings = rc.room!.kings;
+    final drawn = kings?.drawnCount ?? 0;
+    final order = kings?.order ?? const <int>[];
+    final current = drawn > 0 && drawn <= order.length ? _deck[order[drawn - 1]] : null;
+    final remaining = _deck.length - drawn;
+    final kingsSoFar = order.take(drawn).where((i) => _deck[i].rank == 'K').length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Kral Bardağı'),
-        actions: [
-          IconButton(
-            tooltip: 'Desteyi yeniden karıştır',
-            icon: const Icon(Icons.shuffle_rounded),
-            onPressed: _reshuffle,
-          ),
-        ],
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Text(
-                current == null ? 'Deste hazır — kart çek!' : 'Kalan kart: $remaining',
-                style: const TextStyle(color: Colors.white54),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 280),
-                    transitionBuilder: (child, anim) => ScaleTransition(
-                      scale: anim,
-                      child: FadeTransition(opacity: anim, child: child),
-                    ),
-                    child: current == null
-                        ? _IntroCard(key: const ValueKey('intro'), accent: _accent)
-                        : _CardFace(key: ValueKey(_index), card: current, accent: _accent),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GameHeader(
+                  title: 'Kral Bardağı',
+                  trailing: current == null ? 'Deste hazır' : '$remaining kart kaldı',
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: NocturneSpace.side),
+                    children: [
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: _busy ? null : _draw,
+                        child: Container(
+                          height: 300,
+                          padding: const EdgeInsets.all(26),
+                          decoration: BoxDecoration(
+                            color: NocturneColors.neutral200,
+                            borderRadius: BorderRadius.circular(NocturneRadius.lg),
+                          ),
+                          child: current == null
+                              ? const Center(
+                                  child: Text(
+                                    'Kartı çekmek için dokun',
+                                    style: TextStyle(color: NocturneColors.neutral700, fontWeight: FontWeight.w600),
+                                  ),
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _CornerRankSuit(rank: current.rank, suit: current.suit),
+                                    ),
+                                    Text(
+                                      current.suit.toUpperCase(),
+                                      style: const TextStyle(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.w600,
+                                        color: NocturneColors.accent2_700,
+                                      ),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Transform.rotate(
+                                        angle: 3.14159,
+                                        child: _CornerRankSuit(rank: current.rank, suit: current.suit),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: NocturneSpace.cardGap),
+                      if (current != null)
+                        NocturneCard(
+                          background: NocturneColors.surface2,
+                          child: Text(
+                            current.rule,
+                            style: const TextStyle(fontSize: 16, height: 1.45, color: NocturneColors.neutral300),
+                          ),
+                        ),
+                      const SizedBox(height: NocturneSpace.cardGap),
+                      NocturneCard(
+                        background: NocturneColors.surface3,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                        child: Row(
+                          children: [
+                            const Text('👑', style: TextStyle(fontSize: 20)),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                '4. kral bardağı devirir ve hepsini içer',
+                                style: TextStyle(fontSize: 14, color: NocturneColors.neutral500),
+                              ),
+                            ),
+                            Row(
+                              children: List.generate(4, (i) {
+                                final filled = i < kingsSoFar;
+                                return Container(
+                                  margin: const EdgeInsets.only(left: 4),
+                                  width: 9,
+                                  height: 9,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: filled ? NocturneColors.accent2_400 : NocturneColors.border2,
+                                  ),
+                                );
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    NocturneSpace.side,
+                    12,
+                    NocturneSpace.side,
+                    NocturneSpace.bottomSafe,
                   ),
-                  onPressed: _drawNext,
-                  child: Text(
-                    current == null ? 'KARTI ÇEK' : 'SIRADAKİ KART',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  child: NocturnePrimaryButton(
+                    label: current == null ? 'Kart çek' : 'Sıradaki kart',
+                    onPressed: _busy ? null : _draw,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -107,56 +163,26 @@ class _KingsCupScreenState extends State<KingsCupScreen> {
   }
 }
 
-class _IntroCard extends StatelessWidget {
-  final Color accent;
-  const _IntroCard({super.key, required this.accent});
+class _CornerRankSuit extends StatelessWidget {
+  final String rank;
+  final String suit;
+  const _CornerRankSuit({required this.rank, required this.suit});
 
   @override
   Widget build(BuildContext context) {
-    return Icon(Icons.style_rounded, size: 96, color: accent.withValues(alpha: 0.6));
-  }
-}
-
-class _CardFace extends StatelessWidget {
-  final PlayingCard card;
-  final Color accent;
-  const _CardFace({super.key, required this.card, required this.accent});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = card.isRed ? const Color(0xFFEF476F) : Colors.white;
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accent.withValues(alpha: 0.5), width: 2),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            card.rank,
-            style: TextStyle(fontSize: 56, fontWeight: FontWeight.w800, color: color),
-          ),
-          Text(
-            card.suit.toUpperCase(),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
-              color: color.withValues(alpha: 0.75),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            card.rule,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.35),
-          ),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          rank,
+          style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w600, color: NocturneColors.neutral900),
+        ),
+        Text(
+          suit,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: NocturneColors.accent2_700),
+        ),
+      ],
     );
   }
 }

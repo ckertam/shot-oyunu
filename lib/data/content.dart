@@ -45,7 +45,7 @@ List<PlayingCard> buildDeck() {
   return deck;
 }
 
-const List<String> neverHaveIEver = [
+const List<String> neverHaveIEverLight = [
   'Hiç yapmadım... yanlış kişiye mesaj atmadım.',
   'Hiç yapmadım... halka açık bir yerde düşmedim.',
   'Hiç yapmadım... bir yalanı unutup kendimi ele vermedim.',
@@ -81,6 +81,29 @@ const List<String> neverHaveIEver = [
   'Hiç yapmadım... bir yerde kaybolup rota sormaya utanmadım.',
   'Hiç yapmadım... bir gruba yanlışlıkla özel bir mesaj göndermedim.',
   'Hiç yapmadım... bir randevuya/toplantıya yanlış günde gitmedim.',
+];
+
+const List<String> neverHaveIEverHard = [
+  'Hiç yapmadım... eski sevgilimi gizli bir hesaptan takip etmedim.',
+  'Hiç yapmadım... birinin telefonunu izinsiz karıştırmadım.',
+  'Hiç yapmadım... yalandan hastayım deyip işe/okula gitmedim.',
+  'Hiç yapmadım... bu masadaki birine küçük de olsa yalan söylemedim.',
+  'Hiç yapmadım... tanımadığım biriyle sabaha kadar mesajlaşmadım.',
+  'Hiç yapmadım... bir ilişkiyi mesajla bitirmedim.',
+  'Hiç yapmadım... arkadaşımın sevgilisini/eski sevgilisini gizlice beğenmedim.',
+  'Hiç yapmadım... birine "seni özledim" deyip aslında sıkıldığım için yazmadım.',
+  'Hiç yapmadım... bu masadaki birinin telefonuna göz atmak istemedim.',
+  'Hiç yapmadım... bir arkadaşımı gıyabında eleştirmedim.',
+  'Hiç yapmadım... sosyal medyada eski bir aşkın profiline saatlerce bakmadım.',
+  'Hiç yapmadım... bir yalanı o kadar çok tekrarladım ki kendim de inanmaya başlamadım.',
+  'Hiç yapmadım... birine kırıcı bir şey söyleyip "şaka yapıyordum" demedim.',
+  'Hiç yapmadım... bu masadaki birine karşı kıskançlık hissetmedim.',
+  'Hiç yapmadım... bir arkadaşımın sırrını başka birine anlatmadım.',
+  'Hiç yapmadım... geçmişte biriyle "sadece arkadaşız" deyip aslında öyle olmadığı bir şey yaşamadım.',
+  'Hiç yapmadım... bir gece eve gelirken nerede olduğumu tam olarak hatırlamadım.',
+  'Hiç yapmadım... birine "meşgulüm" deyip aslında canım istemediği için cevap vermedim.',
+  'Hiç yapmadım... bu masadaki birini bir konuda kıskandım ve belli etmedim.',
+  'Hiç yapmadım... eski bir mesaj yazışmasını geri dönüp okumadım.',
 ];
 
 const List<String> mostLikelyTo = [

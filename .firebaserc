@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "shotgame-acd8e",
+    "prod": "shotgame-acd8e",
+    "dev": "shot-oyunu-dev"
+  }
+}
